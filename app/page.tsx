@@ -6,7 +6,7 @@ import productCatalog from '@/data/products.json'
 
 const recipients = ['shosman@relesa.com.ar', 'sruiz@relesa.com.ar', 'brotondo@relesa.com.ar', 'farguero@relesa.com.ar', 'cvanina@relesa.com.ar', 'jsuarez@relesa.com.ar', 'llobo@relesa.com.ar']
 
-const products = productCatalog.map((product) => ({ code: product.codigo, name: product.descripcion }))
+const products = productCatalog.map((product) => ({ code: product.material, name: product.descripcion }))
 
 export default function Page() {
   const [counts, setCounts] = useState<Record<string, number>>({})
