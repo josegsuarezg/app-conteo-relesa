@@ -6,7 +6,12 @@ import productCatalog from '@/data/products.json'
 
 const recipients = ['shosman@relesa.com.ar', 'sruiz@relesa.com.ar', 'brotondo@relesa.com.ar', 'farguero@relesa.com.ar', 'cvanina@relesa.com.ar', 'jsuarez@relesa.com.ar', 'llobo@relesa.com.ar']
 
-const products = productCatalog.map((product) => ({ code: product.material, name: product.descripcion }))
+const products = productCatalog.map((product) => ({
+  code: product.material,
+  name: product.descripcion,
+  materialType: product.tipoMat,
+  provider: product.proveedor,
+}))
 
 export default function Page() {
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -15,8 +20,27 @@ export default function Page() {
   const [notes, setNotes] = useState('')
   const [sent, setSent] = useState(false)
   const [showReset, setShowReset] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [selectedProviders, setSelectedProviders] = useState<string[]>([])
 
-  const filteredProducts = useMemo(() => products.filter((product) => `${product.code} ${product.name}`.toLowerCase().includes(query.toLowerCase())), [query])
+  const materialTypes = useMemo(() => [...new Set(products.map((product) => product.materialType))].sort(), [])
+  const providers = useMemo(() => [...new Set(products.map((product) => product.provider))].sort(), [])
+  const activeFilterCount = selectedTypes.length + selectedProviders.length
+  const filteredProducts = useMemo(() => products.filter((product) => {
+    const matchesQuery = `${product.code} ${product.name}`.toLowerCase().includes(query.toLowerCase())
+    const matchesType = selectedTypes.length === 0 || selectedTypes.includes(product.materialType)
+    const matchesProvider = selectedProviders.length === 0 || selectedProviders.includes(product.provider)
+    return matchesQuery && matchesType && matchesProvider
+  }), [query, selectedTypes, selectedProviders])
+  const groupedProducts = useMemo(() => filteredProducts.reduce<Record<string, typeof products>>((groups, product) => {
+    ;(groups[product.materialType] ||= []).push(product)
+    return groups
+  }, {}), [filteredProducts])
+  const clearFilters = () => {
+    setSelectedTypes([])
+    setSelectedProviders([])
+  }
   const totalUnits = Object.values(counts).reduce((sum, count) => sum + count, 0)
   const countedItems = Object.values(counts).filter((count) => count > 0).length
   const progress = Math.round((countedItems / products.length) * 100)
@@ -68,9 +92,9 @@ export default function Page() {
 
         <div className="grid gap-6 lg:grid-cols-[1fr_330px]">
           <section className="rounded-2xl border border-[#e1e5ea] bg-white shadow-[0_8px_30px_rgba(24,32,43,0.04)]">
-            <div className="flex flex-col gap-4 border-b border-[#edf0f3] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold text-[#25303d]">Listado de materiales</h2><p className="mt-1 text-xs text-[#8a94a1]">Usá + y − o escribí la cantidad directamente</p></div><div className="relative w-full sm:w-60"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ba4ae]" size={16}/><input aria-label="Buscar producto" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar material..." className="h-10 w-full rounded-xl border border-[#e2e6eb] bg-[#fafbfc] pl-9 pr-8 text-sm outline-none transition focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10"/>{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9ba4ae]"><X size={15}/></button>}</div></div>
-            <div className="divide-y divide-[#f0f2f4]">{filteredProducts.map((product) => <div key={product.code} className="flex min-w-0 items-start justify-between gap-2 px-3 py-3 transition hover:bg-[#fffafa] sm:items-center sm:gap-3 sm:px-5 sm:py-3.5"><div className="min-w-0 flex-1 pr-1"><span className="mr-2 inline-block w-9 align-top text-[11px] font-bold text-[#d71920] sm:mr-3 sm:text-xs">{product.code}</span><span className="text-[11px] font-medium leading-4 text-[#35404d] sm:text-sm sm:leading-5">{product.name}</span></div><div className="flex shrink-0 items-center gap-0.5 sm:gap-2"><button type="button" onClick={() => updateCount(product.code, -1)} aria-label={`Disminuir ${product.name}`} className="count-button"><Minus aria-hidden="true" size={14}/></button><input type="number" min="0" inputMode="numeric" aria-label={`Cantidad de ${product.name}`} value={counts[product.code] || 0} onChange={(event) => setManualCount(product.code, event.target.value)} className={`h-8 w-10 rounded-lg border border-[#e2e6eb] bg-white px-0 text-center text-xs font-bold outline-none focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10 sm:h-9 sm:w-14 sm:text-sm ${counts[product.code] ? 'text-[#d71920]' : 'text-[#aab2bb]'}`} /><button type="button" onClick={() => updateCount(product.code, 1)} aria-label={`Aumentar ${product.name}`} className="count-button count-plus"><Plus aria-hidden="true" size={14}/></button></div></div>)}</div>
-            {filteredProducts.length === 0 && <div className="p-10 text-center text-sm text-[#7c8793]">No encontramos materiales con esa búsqueda.</div>}
+            <div className="flex flex-col gap-4 border-b border-[#edf0f3] p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold text-[#25303d]">Listado de materiales</h2><p className="mt-1 text-xs text-[#8a94a1]">Usá + y − o escribí la cantidad directamente</p></div><div className="flex w-full gap-2 sm:w-auto"><div className="relative min-w-0 flex-1 sm:w-60"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ba4ae]" size={16}/><input aria-label="Buscar producto" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar material..." className="h-10 w-full rounded-xl border border-[#e2e6eb] bg-[#fafbfc] pl-9 pr-8 text-sm outline-none transition focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10"/>{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9ba4ae]"><X size={15}/></button>}</div><button type="button" onClick={() => setShowFilters((current) => !current)} className="h-10 shrink-0 rounded-xl border border-[#e2e6eb] px-3 text-xs font-bold text-[#56616e] transition hover:border-[#d71920] hover:text-[#d71920]">Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button></div></div>{showFilters && <div className="grid gap-4 rounded-xl bg-[#fafbfc] p-4 sm:grid-cols-2"><fieldset><legend className="text-[11px] font-bold uppercase tracking-wide text-[#66717e]">Tipo de material</legend><div className="mt-2 flex flex-wrap gap-2">{materialTypes.map((type) => <label key={type} className="flex cursor-pointer items-center gap-2 text-xs text-[#35404d]"><input type="checkbox" checked={selectedTypes.includes(type)} onChange={() => setSelectedTypes((current) => current.includes(type) ? current.filter((value) => value !== type) : [...current, type])} className="accent-[#d71920]" />{type}</label>)}</div></fieldset><fieldset><legend className="text-[11px] font-bold uppercase tracking-wide text-[#66717e]">Proveedor</legend><div className="mt-2 flex flex-wrap gap-2">{providers.map((provider) => <label key={provider} className="flex cursor-pointer items-center gap-2 text-xs text-[#35404d]"><input type="checkbox" checked={selectedProviders.includes(provider)} onChange={() => setSelectedProviders((current) => current.includes(provider) ? current.filter((value) => value !== provider) : [...current, provider])} className="accent-[#d71920]" />{provider}</label>)}</div></fieldset>{activeFilterCount > 0 && <button type="button" onClick={clearFilters} className="text-left text-xs font-bold text-[#d71920] hover:underline">Limpiar filtros</button>}</div>}</div>
+            <div>{Object.entries(groupedProducts).map(([type, typeProducts]) => <section key={type}><div className="flex items-center justify-between border-b border-[#f0d9d9] bg-[#fff7f7] px-3 py-2.5 sm:px-5"><h3 className="text-xs font-black uppercase tracking-wide text-[#c51b22]">{type}</h3><span className="text-[11px] font-semibold text-[#9a6265]">{typeProducts.length} materiales</span></div><div className="divide-y divide-[#f0f2f4]">{typeProducts.map((product) => <div key={product.code} className="flex min-w-0 items-start justify-between gap-2 px-3 py-3 transition hover:bg-[#fffafa] sm:items-center sm:gap-3 sm:px-5 sm:py-3.5"><div className="min-w-0 flex-1 pr-1"><span className="mr-2 inline-block w-9 align-top text-[11px] font-bold text-[#d71920] sm:mr-3 sm:text-xs">{product.code}</span><span className="text-[11px] font-medium leading-4 text-[#35404d] sm:text-sm sm:leading-5">{product.name}</span></div><div className="flex shrink-0 items-center gap-0.5 sm:gap-2"><button type="button" onClick={() => updateCount(product.code, -1)} aria-label={`Disminuir ${product.name}`} className="count-button"><Minus aria-hidden="true" size={14}/></button><input type="number" min="0" inputMode="numeric" aria-label={`Cantidad de ${product.name}`} value={counts[product.code] || 0} onChange={(event) => setManualCount(product.code, event.target.value)} className={`h-8 w-10 rounded-lg border border-[#e2e6eb] bg-white px-0 text-center text-xs font-bold outline-none focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10 sm:h-9 sm:w-14 sm:text-sm ${counts[product.code] ? 'text-[#d71920]' : 'text-[#aab2bb]'}`} /><button type="button" onClick={() => updateCount(product.code, 1)} aria-label={`Aumentar ${product.name}`} className="count-button count-plus"><Plus aria-hidden="true" size={14}/></button></div></div>)}</div></section>)}</div>
+            {filteredProducts.length === 0 && <div className="p-10 text-center text-sm text-[#7c8793]">No encontramos materiales con esos filtros.</div>}
           </section>
 
           <aside className="space-y-5">
