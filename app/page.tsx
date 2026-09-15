@@ -4,8 +4,6 @@ import { useMemo, useState } from 'react'
 import { Check, ClipboardList, Mail, Minus, Plus, RotateCcw, Search, Send, Truck, X } from 'lucide-react'
 import productCatalog from '@/data/products.json'
 
-const recipients = ['shosman@relesa.com.ar', 'sruiz@relesa.com.ar', 'brotondo@relesa.com.ar', 'farguero@relesa.com.ar', 'cvanina@relesa.com.ar', 'jsuarez@relesa.com.ar', 'llobo@relesa.com.ar']
-
 const products = productCatalog.map((product) => ({ code: product.codigo, name: product.descripcion }))
 
 export default function Page() {
@@ -14,6 +12,8 @@ export default function Page() {
   const [operator, setOperator] = useState('')
   const [notes, setNotes] = useState('')
   const [sent, setSent] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
   const [showReset, setShowReset] = useState(false)
 
   const filteredProducts = useMemo(() => products.filter((product) => `${product.code} ${product.name}`.toLowerCase().includes(query.toLowerCase())), [query])
@@ -34,11 +34,30 @@ export default function Page() {
     }
   }
 
-  function sendReport() {
-    const lines = products.filter((product) => counts[product.code] > 0).map((product) => `${product.code} - ${product.name}: ${counts[product.code]}`)
-    const body = [`CONTEO DE MERCADERÍA — RELESA`, `Operador: ${operator || 'Sin especificar'}`, `Fecha: ${new Date().toLocaleString('es-AR')}`, '', ...lines, '', `Total de unidades: ${totalUnits}`, `Ítems contados: ${countedItems}/${products.length}`, notes ? `Observaciones: ${notes}` : ''].join('\n')
-    window.location.href = `mailto:${recipients.join(',')}?subject=${encodeURIComponent('Conteo de mercadería — RELESA')}&body=${encodeURIComponent(body)}`
-    setSent(true)
+  async function sendReport() {
+    const reportProducts = products.filter((product) => counts[product.code] > 0).map((product) => ({ ...product, quantity: counts[product.code] }))
+    if (reportProducts.length === 0) {
+      setSendError('Ingresá stock en al menos un material antes de enviar.')
+      return
+    }
+
+    setSending(true)
+    setSendError('')
+    setSent(false)
+    try {
+      const response = await fetch('/api/enviar-conteo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator, notes, products: reportProducts, totalUnits, countedItems, totalProducts: products.length }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'No se pudo enviar el resumen.')
+      setSent(true)
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'No se pudo enviar el resumen.')
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -74,7 +93,7 @@ export default function Page() {
           </section>
 
           <aside className="space-y-5">
-            <section className="rounded-2xl border border-[#e1e5ea] bg-white p-5 shadow-[0_8px_30px_rgba(24,32,43,0.04)]"><h2 className="font-bold text-[#25303d]">Datos del conteo</h2><label className="mt-5 block text-xs font-bold text-[#66717e]">OPERADOR</label><input value={operator} onChange={(event) => setOperator(event.target.value)} placeholder="Nombre y apellido" className="mt-2 h-11 w-full rounded-xl border border-[#e2e6eb] px-3 text-sm outline-none focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10"/><label className="mt-4 block text-xs font-bold text-[#66717e]">OBSERVACIONES <span className="font-normal text-[#a5adb6]">(opcional)</span></label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Agregá algún comentario..." rows={4} className="mt-2 w-full resize-none rounded-xl border border-[#e2e6eb] p-3 text-sm outline-none focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10"/><button onClick={sendReport} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#d71920] text-sm font-bold text-white shadow-[0_5px_14px_rgba(215,25,32,0.22)] transition hover:bg-[#b9141a] active:scale-[0.98]"><Send size={16}/> {sent ? 'Resumen preparado' : 'Enviar resumen'}</button><p className="mt-3 text-center text-[11px] leading-4 text-[#929ba5]">Se abrirá tu aplicación de correo con el resumen y los destinatarios cargados.</p></section>
+            <section className="rounded-2xl border border-[#e1e5ea] bg-white p-5 shadow-[0_8px_30px_rgba(24,32,43,0.04)]"><h2 className="font-bold text-[#25303d]">Datos del conteo</h2><label className="mt-5 block text-xs font-bold text-[#66717e]">OPERADOR</label><input value={operator} onChange={(event) => setOperator(event.target.value)} placeholder="Nombre y apellido" className="mt-2 h-11 w-full rounded-xl border border-[#e2e6eb] px-3 text-sm outline-none focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10"/><label className="mt-4 block text-xs font-bold text-[#66717e]">OBSERVACIONES <span className="font-normal text-[#a5adb6]">(opcional)</span></label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Agregá algún comentario..." rows={4} className="mt-2 w-full resize-none rounded-xl border border-[#e2e6eb] p-3 text-sm outline-none focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/10"/><button onClick={sendReport} disabled={sending} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#d71920] text-sm font-bold text-white shadow-[0_5px_14px_rgba(215,25,32,0.22)] transition hover:bg-[#b9141a] active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"><Send size={16}/> {sending ? 'Enviando...' : sent ? 'Resumen enviado' : 'Enviar resumen'}</button><p className="mt-3 text-center text-[11px] leading-4 text-[#929ba5]">Se enviará automáticamente a los destinatarios configurados.</p>{sendError && <p role="alert" className="mt-2 text-center text-xs font-semibold text-[#c51b22]">{sendError}</p>}</section>
             <section className="rounded-2xl border border-[#f0d9d9] bg-[#fff7f7] p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-[#c51b22]">Resumen actual</p><p className="mt-1 text-2xl font-black text-[#25303d]">{totalUnits} <span className="text-sm font-medium text-[#7f8994]">unidades</span></p></div><Mail className="text-[#d71920]" size={22}/></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-[#f1dada]"><div className="h-full rounded-full bg-[#d71920] transition-all" style={{ width: `${progress}%` }}/></div></section>
             <button onClick={() => setShowReset(true)} className="flex w-full items-center justify-center gap-2 py-2 text-xs font-semibold text-[#8b949e] transition hover:text-[#d71920]"><RotateCcw size={14}/> Reiniciar conteo</button>
           </aside>
